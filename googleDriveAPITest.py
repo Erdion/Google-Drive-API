@@ -5,6 +5,7 @@ import io
 import argparse
 import mimetypes
 import googleMimeTest as googleMT
+import json
 from apiclient.http import MediaIoBaseDownload, MediaFileUpload
 
 from apiclient import discovery
@@ -26,12 +27,16 @@ def initParser():
 
 class GoogleDrive:
     __filePath = ''
-    SCOPES = 'https://www.googleapis.com/auth/drive'
+    SCOPES = ['https://www.googleapis.com/auth/drive']
     CLIENT_SECRET_FILE = 'client_secret.json' #secret file needed to authenticate app
     APPLICATION_NAME = 'Drive API Python Quickstart'
 
-    def __init__(self):
-        credentials = self.__getCredentials()
+    def __init__(self, install):
+        if(install):
+            credentials = self.__getCredentials('https://www.googleapis.com/auth/drive.install')
+        else:
+            credentials = self.__getCredentials()
+
         http = credentials.authorize(httplib2.Http())
         self.__driveService = discovery.build('drive', 'v3', http=http)
         mimetypes.init()
@@ -74,9 +79,6 @@ class GoogleDrive:
             for item in items:
                 print('{0} ({1})'.format(item['name'], item['mimeType']))
 
-    def install(self): #not finished
-        self.__getCredentials('https://www.googleapis.com/auth/drive.install')
-
     def __find(self, containsName):
         results = self.__driveService.files().list(q = "name contains '{0}'".format(containsName), fields="nextPageToken, files(id, name, mimeType)").execute() #Things which can be retrieved from files(): https://developers.google.com/drive/v3/reference/files#resource
         return results.get('files', [])
@@ -96,8 +98,8 @@ class GoogleDrive:
         Returns:
             Credentials, the obtained credential.
         """
-        if(additionalScope is None):
-            self.SCOPES = [self.SCOPES, additionalScope]
+        if(additionalScope is not None and additionalScope not in self.SCOPES):
+            self.SCOPES.append(additionalScope)
         home_dir = os.path.expanduser('~')
         credential_dir = os.path.join(home_dir, '.credentials')
         if not os.path.exists(credential_dir):
@@ -107,7 +109,17 @@ class GoogleDrive:
     
         store = Storage(credential_path)
         credentials = store.get()
-        if not credentials or credentials.invalid:
+
+        getType = lambda https: [item.split('/')[-1] for item in https]
+
+        credentialsTypes = []
+        if(credentials is not None):
+            credentialsTypes = getType(json.loads(credentials.to_json())['scopes'])
+
+        scopesTypes = getType(self.SCOPES)
+
+        credentialsNotSet = set(scopesTypes) - set(credentialsTypes)
+        if not credentials or credentials.invalid or credentialsNotSet:
             flow = client.flow_from_clientsecrets(self.CLIENT_SECRET_FILE, self.SCOPES)
             flow.user_agent = self.APPLICATION_NAME
             flags = tools.argparser.parse_args(args=[]) #dummy flags needed
@@ -120,7 +132,10 @@ class GoogleDrive:
 def main():
 
     flags = initParser()
-    googleDrive = GoogleDrive()
+    if(flags.install):
+        googleDrive = GoogleDrive(install=True)
+    else:
+        googleDrive = GoogleDrive(install=False)
     if(flags.download is not None):
         for fileName in flags.download:
             googleDrive.download(fileName)
@@ -129,8 +144,6 @@ def main():
             googleDrive.upload(fileName)
     if(flags.list):
         googleDrive.list()
-    if(flags.install):
-        googleDrive.install()
     
 if __name__ == '__main__':
     main()

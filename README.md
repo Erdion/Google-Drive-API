@@ -13,6 +13,6 @@ python googleDriveAPITest.py [-h] [-d [FILENAME [FILENAME...]]] [-u [FILENAME [F
   -l, --list            
                         List all files
   -i, --install         
-                        Install app on google drive (not working yet)
+                        Install app on google drive
   
 ```
